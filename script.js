@@ -1,6 +1,8 @@
 const areYouSure = new Audio("./assets/are-you-sure.mp3");
 const distortedAreYouSure = new Audio("./assets/distorted-are-you-sure.mp3");
 const prettySure = new Audio("./assets/prettysure.mp3");
+areYouSure.loop = true;
+distortedAreYouSure.loop = true;
 
 if (!window.localStorage.getItem("points")) {
 	window.localStorage.setItem("points", 0);
@@ -55,29 +57,65 @@ const startChallenge = async () => {
 	omniman.id = "omniman";
 	document.body.appendChild(omniman);
 
-	areYouSure.loop = true;
-	distortedAreYouSure.loop = true;
-
-	// Start playing the main audio after the context resumes
 	areYouSure.play();
 
 	omniman.addEventListener("click", async () => {
 		clearInterval(timer);
-		document.getElementById("start-container").style.display = "flex";
-		omniman.remove();
-		document.getElementById("title-question").innerText = "You found Omniman!";
-		document.getElementById("start-button").innerText = "Again?";
+		let startContainer = document.getElementById("start-container");
+		startContainer.style.display = "flex";
 		window.removeEventListener("mousemove", handleMouseMove);
 		areYouSure.pause();
 		areYouSure.currentTime = 0;
 		distortedAreYouSure.pause();
 		distortedAreYouSure.currentTime = 0;
+		prettySure.play();
+		document.getElementById("title-question").style.display = "none";
+		document.getElementById("start-button").style.display = "none";
+		document.getElementById("points").style.display = "none";
+		startContainer.style.backgroundImage =
+			"url(https://us-tuna-sounds-images.voicemod.net/13e358e4-8406-4d0a-a724-b89c38e64a0a-1701486070717.jpg)";
+		startContainer.style.backgroundSize = "cover";
+		startContainer.style.backgroundPosition = "center";
+		startContainer.style.backgroundRepeat = "no-repeat";
+		await new Promise((resolve) => setTimeout(resolve, 2000));
+		omniman.remove();
+		startContainer.style.background = "";
+		document.getElementById("title-question").style.display = "flex";
+		document.getElementById("start-button").style.display = "flex";
+		document.getElementById("points").style.display = "flex";
+		document.getElementById(
+			"title-question"
+		).innerText = `You found Omniman!\nTook you ${
+			time.toFixed(2) / 100
+		} seconds.`;
+		document.getElementById("start-button").style.display = "flex";
+		document.getElementById("start-button").innerText = "Again?";
 		await addPoint();
 		document.getElementById(
 			"points"
 		).innerText = `Points: ${window.localStorage.getItem("points")}`;
-		prettySure.play();
 	});
+
+	let currentSound = null;
+
+	const fadeAudioToVolume = (audio, targetVolume, duration = 300) => {
+		const startVolume = audio.volume;
+		const startTime = performance.now();
+
+		const step = (now) => {
+			const elapsed = now - startTime;
+			const progress = Math.min(elapsed / duration, 1);
+			audio.volume = startVolume + (targetVolume - startVolume) * progress;
+
+			if (progress < 1) {
+				requestAnimationFrame(step);
+			} else if (targetVolume === 0) {
+				audio.pause();
+			}
+		};
+
+		requestAnimationFrame(step);
+	};
 
 	const handleMouseMove = (e) => {
 		const omnimanRect = omniman.getBoundingClientRect();
@@ -92,29 +130,33 @@ const startChallenge = async () => {
 		const maxDistance = 1000;
 		const minDistance = 100;
 
-		if (distance > maxDistance) {
-			if (!areYouSure.paused) areYouSure.pause();
-			if (!distortedAreYouSure.paused) distortedAreYouSure.pause();
-		} else if (distance < minDistance) {
-			if (areYouSure.playing) {
-				areYouSure.pause();
-				areYouSure.currentTime = 0;
-			}
-			if (distortedAreYouSure.paused) {
-				distortedAreYouSure.currentTime = 0;
-				distortedAreYouSure.play();
-			}
-		} else if (distance > minDistance) {
-			if (areYouSure.paused) areYouSure.play();
-			if (!distortedAreYouSure.paused) distortedAreYouSure.pause();
+		let targetAudio = null;
+
+		if (distance >= maxDistance) {
+			targetAudio = null;
+		} else if (distance <= minDistance) {
+			targetAudio = distortedAreYouSure;
 		} else {
-			if (distortedAreYouSure.playing) {
-				distortedAreYouSure.pause();
-				distortedAreYouSure.currentTime = 0;
+			targetAudio = areYouSure;
+		}
+
+		let targetVolume = 0;
+		if (targetAudio === distortedAreYouSure) {
+			targetVolume = 1 - distance / minDistance;
+		} else if (targetAudio === areYouSure) {
+			targetVolume = 1 - (distance - minDistance) / (maxDistance - minDistance);
+		}
+
+		if (targetAudio !== currentSound) {
+			if (currentSound) fadeAudioToVolume(currentSound, 0, 200);
+			if (targetAudio) {
+				targetAudio.currentTime = 0;
+				targetAudio.play();
+				fadeAudioToVolume(targetAudio, targetVolume, 200);
 			}
-			if (areYouSure.paused) areYouSure.play();
-			areYouSure.volume =
-				1 - (distance - minDistance) / (maxDistance - minDistance);
+			currentSound = targetAudio;
+		} else if (currentSound) {
+			currentSound.volume = targetVolume;
 		}
 	};
 
